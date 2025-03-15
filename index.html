@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #loading {
+            font-size: 24px;
+            margin: 20px;
+        }
+        #gameContainer {
+            margin-top: 20px;
+        }
+        .button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        #gameCanvas {
+            border: 2px solid #4CAF50;
+            margin-top: 20px;
+        }
+        .instructions {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Snake Game</h1>
+    <div id="loading">Loading Python...</div>
+    <div id="gameContainer" style="display: none;">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <div class="instructions">
+        <h2>How to Play</h2>
+        <ul>
+            <li>Use arrow keys to control the snake</li>
+            <li>Eat the red food to grow and increase your score</li>
+            <li>Avoid hitting yourself</li>
+            <li>Your high score is saved automatically</li>
+        </ul>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <script>
+        async function main() {
+            let pyodide = await loadPyodide();
+            await pyodide.loadPackage(["pygame"]);
+            
+            const response = await fetch('snake_game_web.py');
+            const pythonCode = await response.text();
+            
+            try {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('gameContainer').style.display = 'block';
+                await pyodide.runPythonAsync(pythonCode);
+            } catch (error) {
+                console.error("Error running Python code:", error);
+                document.getElementById('loading').textContent = 'Error loading game: ' + error.message;
+            }
+        }
+        main();
+    </script>
+</body>
+</html> 
