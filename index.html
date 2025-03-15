@@ -16,31 +16,13 @@
             align-items: center;
             min-height: 100vh;
         }
-        #loading {
-            font-size: 24px;
-            margin: 20px;
-            text-align: center;
-        }
         #gameContainer {
             margin-top: 20px;
-            display: none;
-        }
-        .button {
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
         }
         #gameCanvas {
             border: 2px solid #4CAF50;
             margin-top: 20px;
+            background-color: black;
         }
         .instructions {
             max-width: 600px;
@@ -49,30 +31,20 @@
             background-color: #2a2a2a;
             border-radius: 8px;
         }
-        #loadingProgress {
-            margin-top: 10px;
-            font-size: 16px;
-            color: #4CAF50;
-        }
-        #errorMessage {
-            color: #ff4444;
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #ff4444;
-            border-radius: 4px;
-            display: none;
+        .score-container {
+            font-size: 24px;
+            margin: 10px 0;
         }
     </style>
 </head>
 <body>
     <h1>Snake Game</h1>
-    <div id="loading">
-        Loading Python Environment...
-        <div id="loadingProgress"></div>
+    <div class="score-container">
+        <span>Score: <span id="score">0</span></span>
+        <span style="margin-left: 20px;">High Score: <span id="highScore">0</span></span>
     </div>
-    <div id="errorMessage"></div>
     <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
     </div>
     <div class="instructions">
         <h2>How to Play</h2>
@@ -80,55 +52,176 @@
             <li>Use arrow keys to control the snake</li>
             <li>Eat the red food to grow and increase your score</li>
             <li>Avoid hitting yourself</li>
+            <li>Press P to pause the game</li>
+            <li>Press R to restart when game is over</li>
             <li>Your high score is saved automatically</li>
         </ul>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
     <script>
-        const loadingProgress = document.getElementById('loadingProgress');
-        const errorMessage = document.getElementById('errorMessage');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const GRID_SIZE = 20;
+        const GRID_WIDTH = canvas.width / GRID_SIZE;
+        const GRID_HEIGHT = canvas.height / GRID_SIZE;
+        
+        let snake = {
+            body: [{x: 10, y: 10}],
+            direction: {x: 1, y: 0},
+            grow: false
+        };
+        
+        let food = {
+            x: 15,
+            y: 15
+        };
+        
+        let score = 0;
+        let highScore = localStorage.getItem('snakeHighScore') || 0;
+        let gameOver = false;
+        let paused = false;
+        let lastRenderTime = 0;
+        const GAME_SPEED = 10;
 
-        function updateProgress(message) {
-            loadingProgress.textContent = message;
-        }
+        document.getElementById('highScore').textContent = highScore;
 
-        function showError(message) {
-            errorMessage.style.display = 'block';
-            errorMessage.textContent = message;
-            document.getElementById('loading').style.display = 'none';
-        }
-
-        async function main() {
-            try {
-                updateProgress('Initializing Pyodide...');
-                let pyodide = await loadPyodide({
-                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/"
-                });
-
-                updateProgress('Loading Pygame...');
-                await pyodide.loadPackage(["pygame"]);
-
-                updateProgress('Loading game code...');
-                const response = await fetch('snake_game_web.py');
-                if (!response.ok) {
-                    throw new Error(`Failed to load game code: ${response.status} ${response.statusText}`);
+        function drawGrid() {
+            ctx.fillStyle = '#003300';
+            for(let x = 0; x < GRID_WIDTH; x++) {
+                for(let y = 0; y < GRID_HEIGHT; y++) {
+                    if((x + y) % 2 === 0) {
+                        ctx.fillRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+                    }
                 }
-                const pythonCode = await response.text();
-
-                updateProgress('Starting game...');
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('gameContainer').style.display = 'block';
-                
-                await pyodide.runPythonAsync(pythonCode);
-            } catch (error) {
-                console.error("Error:", error);
-                showError(`Failed to load game: ${error.message}. Please try refreshing the page.`);
             }
         }
 
-        // Start loading when the page is fully loaded
-        window.addEventListener('load', main);
+        function drawSnake() {
+            ctx.fillStyle = '#00ff00';
+            snake.body.forEach(segment => {
+                ctx.fillRect(segment.x * GRID_SIZE, segment.y * GRID_SIZE, GRID_SIZE - 1, GRID_SIZE - 1);
+            });
+        }
+
+        function drawFood() {
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(food.x * GRID_SIZE, food.y * GRID_SIZE, GRID_SIZE - 1, GRID_SIZE - 1);
+        }
+
+        function moveSnake() {
+            if(gameOver || paused) return;
+
+            const newHead = {
+                x: (snake.body[0].x + snake.direction.x + GRID_WIDTH) % GRID_WIDTH,
+                y: (snake.body[0].y + snake.direction.y + GRID_HEIGHT) % GRID_HEIGHT
+            };
+
+            // Check for collision with self
+            if(snake.body.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
+                gameOver = true;
+                if(score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('snakeHighScore', highScore);
+                    document.getElementById('highScore').textContent = highScore;
+                }
+                return;
+            }
+
+            snake.body.unshift(newHead);
+
+            if(newHead.x === food.x && newHead.y === food.y) {
+                score += 10;
+                document.getElementById('score').textContent = score;
+                randomizeFood();
+            } else if(!snake.grow) {
+                snake.body.pop();
+            }
+            snake.grow = false;
+        }
+
+        function randomizeFood() {
+            food.x = Math.floor(Math.random() * GRID_WIDTH);
+            food.y = Math.floor(Math.random() * GRID_HEIGHT);
+            // Make sure food doesn't appear on snake
+            while(snake.body.some(segment => segment.x === food.x && segment.y === food.y)) {
+                food.x = Math.floor(Math.random() * GRID_WIDTH);
+                food.y = Math.floor(Math.random() * GRID_HEIGHT);
+            }
+        }
+
+        function drawText(text, size, y) {
+            ctx.fillStyle = 'white';
+            ctx.font = `${size}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText(text, canvas.width / 2, y);
+        }
+
+        function gameLoop(currentTime) {
+            window.requestAnimationFrame(gameLoop);
+
+            const secondsSinceLastRender = (currentTime - lastRenderTime) / 1000;
+            if(secondsSinceLastRender < 1 / GAME_SPEED) return;
+
+            lastRenderTime = currentTime;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+            moveSnake();
+            drawSnake();
+            drawFood();
+
+            if(gameOver) {
+                drawText('GAME OVER', 48, canvas.height / 2);
+                drawText('Press R to restart', 24, canvas.height / 2 + 40);
+            } else if(paused) {
+                drawText('PAUSED', 48, canvas.height / 2);
+                drawText('Press P to continue', 24, canvas.height / 2 + 40);
+            }
+        }
+
+        function resetGame() {
+            snake.body = [{x: 10, y: 10}];
+            snake.direction = {x: 1, y: 0};
+            score = 0;
+            document.getElementById('score').textContent = score;
+            gameOver = false;
+            randomizeFood();
+        }
+
+        document.addEventListener('keydown', e => {
+            if(e.key === 'p' || e.key === 'P') {
+                paused = !paused;
+            } else if((e.key === 'r' || e.key === 'R') && gameOver) {
+                resetGame();
+            } else if(!paused && !gameOver) {
+                switch(e.key) {
+                    case 'ArrowUp':
+                        if(snake.direction.y !== 1) {
+                            snake.direction = {x: 0, y: -1};
+                        }
+                        break;
+                    case 'ArrowDown':
+                        if(snake.direction.y !== -1) {
+                            snake.direction = {x: 0, y: 1};
+                        }
+                        break;
+                    case 'ArrowLeft':
+                        if(snake.direction.x !== 1) {
+                            snake.direction = {x: -1, y: 0};
+                        }
+                        break;
+                    case 'ArrowRight':
+                        if(snake.direction.x !== -1) {
+                            snake.direction = {x: 1, y: 0};
+                        }
+                        break;
+                }
+            }
+        });
+
+        // Start the game
+        randomizeFood();
+        window.requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html> 
