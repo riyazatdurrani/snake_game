@@ -4,8 +4,9 @@ import json
 from js import document, window
 from pyodide.ffi import create_proxy
 
-# Initialize Pygame
+# Initialize Pygame with the correct flags for web
 pygame.init()
+pygame.display.set_mode((1,1), pygame.NOFRAME)  # Dummy display for Pygame
 
 # Colors
 BLACK = (0, 0, 0)
@@ -22,12 +23,17 @@ GRID_SIZE = 20
 GRID_WIDTH = WINDOW_WIDTH // GRID_SIZE
 GRID_HEIGHT = WINDOW_HEIGHT // GRID_SIZE
 GAME_SPEED = 10
+FPS = 30
 
 # Initialize the canvas
 canvas = document.getElementById('gameCanvas')
 canvas.width = WINDOW_WIDTH
 canvas.height = WINDOW_HEIGHT
 screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+
+# Game state
+PAUSED = False
+GAME_OVER = False
 
 # Directional constants
 UP = (0, -1)
@@ -52,12 +58,18 @@ class Snake:
             return 0
 
     def save_high_score(self):
-        window.localStorage.setItem('snake_high_score', str(self.high_score))
+        try:
+            window.localStorage.setItem('snake_high_score', str(self.high_score))
+        except:
+            pass  # Fail silently if localStorage is not available
 
     def get_head_position(self):
         return self.positions[0]
 
     def update(self):
+        if PAUSED or GAME_OVER:
+            return True
+            
         cur = self.get_head_position()
         x, y = self.direction
         new = ((cur[0] + x) % GRID_WIDTH, (cur[1] + y) % GRID_HEIGHT)
@@ -93,18 +105,34 @@ class Food:
                         (self.position[0] * GRID_SIZE, self.position[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
 
 def handle_keys(event, snake):
+    global PAUSED, GAME_OVER
+    
     if event.type == pygame.KEYDOWN:
-        if event.key == pygame.K_UP and snake.direction != DOWN:
-            snake.direction = UP
-        elif event.key == pygame.K_DOWN and snake.direction != UP:
-            snake.direction = DOWN
-        elif event.key == pygame.K_LEFT and snake.direction != RIGHT:
-            snake.direction = LEFT
-        elif event.key == pygame.K_RIGHT and snake.direction != LEFT:
-            snake.direction = RIGHT
+        if event.key == pygame.K_p:  # P key to pause
+            PAUSED = not PAUSED
+        elif event.key == pygame.K_r:  # R key to restart
+            GAME_OVER = False
+            snake.reset()
+        elif not PAUSED and not GAME_OVER:
+            if event.key == pygame.K_UP and snake.direction != DOWN:
+                snake.direction = UP
+            elif event.key == pygame.K_DOWN and snake.direction != UP:
+                snake.direction = DOWN
+            elif event.key == pygame.K_LEFT and snake.direction != RIGHT:
+                snake.direction = LEFT
+            elif event.key == pygame.K_RIGHT and snake.direction != LEFT:
+                snake.direction = RIGHT
+
+def draw_text_center(surface, text, size, color, y_offset=0):
+    font = pygame.font.Font(None, size)
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect()
+    text_rect.centerx = surface.get_rect().centerx
+    text_rect.centery = surface.get_rect().centery + y_offset
+    surface.blit(text_surface, text_rect)
 
 def game_loop(time):
-    global snake, food
+    global snake, food, GAME_OVER
     
     # Handle events
     for event in pygame.event.get():
@@ -112,14 +140,13 @@ def game_loop(time):
 
     # Update snake
     if not snake.update():
+        GAME_OVER = True
         if snake.score > snake.high_score:
             snake.high_score = snake.score
             snake.save_high_score()
-        snake.reset()
-        food.randomize_position()
 
     # Check if snake ate the food
-    if snake.get_head_position() == food.position:
+    if not PAUSED and not GAME_OVER and snake.get_head_position() == food.position:
         snake.length += 1
         snake.score += 10
         food.randomize_position()
@@ -144,6 +171,14 @@ def game_loop(time):
     high_score_text = font.render(f'High Score: {snake.high_score}', True, WHITE)
     screen.blit(score_text, (10, 10))
     screen.blit(high_score_text, (10, 50))
+
+    # Draw pause/game over text
+    if PAUSED:
+        draw_text_center(screen, "PAUSED", 64, WHITE)
+        draw_text_center(screen, "Press P to continue", 32, WHITE, 50)
+    elif GAME_OVER:
+        draw_text_center(screen, "GAME OVER", 64, WHITE)
+        draw_text_center(screen, "Press R to restart", 32, WHITE, 50)
 
     # Update canvas
     canvas_ctx = canvas.getContext('2d')

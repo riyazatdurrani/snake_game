@@ -19,9 +19,11 @@
         #loading {
             font-size: 24px;
             margin: 20px;
+            text-align: center;
         }
         #gameContainer {
             margin-top: 20px;
+            display: none;
         }
         .button {
             background-color: #4CAF50;
@@ -47,12 +49,29 @@
             background-color: #2a2a2a;
             border-radius: 8px;
         }
+        #loadingProgress {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #4CAF50;
+        }
+        #errorMessage {
+            color: #ff4444;
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ff4444;
+            border-radius: 4px;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <h1>Snake Game</h1>
-    <div id="loading">Loading Python...</div>
-    <div id="gameContainer" style="display: none;">
+    <div id="loading">
+        Loading Python Environment...
+        <div id="loadingProgress"></div>
+    </div>
+    <div id="errorMessage"></div>
+    <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
     </div>
     <div class="instructions">
@@ -67,23 +86,49 @@
 
     <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
     <script>
+        const loadingProgress = document.getElementById('loadingProgress');
+        const errorMessage = document.getElementById('errorMessage');
+
+        function updateProgress(message) {
+            loadingProgress.textContent = message;
+        }
+
+        function showError(message) {
+            errorMessage.style.display = 'block';
+            errorMessage.textContent = message;
+            document.getElementById('loading').style.display = 'none';
+        }
+
         async function main() {
-            let pyodide = await loadPyodide();
-            await pyodide.loadPackage(["pygame"]);
-            
-            const response = await fetch('snake_game_web.py');
-            const pythonCode = await response.text();
-            
             try {
+                updateProgress('Initializing Pyodide...');
+                let pyodide = await loadPyodide({
+                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/"
+                });
+
+                updateProgress('Loading Pygame...');
+                await pyodide.loadPackage(["pygame"]);
+
+                updateProgress('Loading game code...');
+                const response = await fetch('snake_game_web.py');
+                if (!response.ok) {
+                    throw new Error(`Failed to load game code: ${response.status} ${response.statusText}`);
+                }
+                const pythonCode = await response.text();
+
+                updateProgress('Starting game...');
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('gameContainer').style.display = 'block';
+                
                 await pyodide.runPythonAsync(pythonCode);
             } catch (error) {
-                console.error("Error running Python code:", error);
-                document.getElementById('loading').textContent = 'Error loading game: ' + error.message;
+                console.error("Error:", error);
+                showError(`Failed to load game: ${error.message}. Please try refreshing the page.`);
             }
         }
-        main();
+
+        // Start loading when the page is fully loaded
+        window.addEventListener('load', main);
     </script>
 </body>
 </html> 
