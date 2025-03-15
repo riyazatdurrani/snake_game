@@ -15,9 +15,11 @@
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
+            touch-action: none;
         }
         #gameContainer {
             margin-top: 20px;
+            position: relative;
         }
         #gameCanvas {
             border: 2px solid #4CAF50;
@@ -35,6 +37,73 @@
             font-size: 24px;
             margin: 10px 0;
         }
+        #controls {
+            position: relative;
+            width: 300px;
+            height: 200px;
+            margin: 20px auto;
+            display: none; /* Hidden by default, shown on mobile */
+        }
+        .control-btn {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background-color: rgba(76, 175, 80, 0.7);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #upBtn {
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #downBtn {
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #leftBtn {
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #rightBtn {
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #restartBtn {
+            position: absolute;
+            bottom: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 69, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 30px;
+            width: auto;
+            height: auto;
+        }
+        @media (max-width: 800px) {
+            #gameCanvas {
+                width: 100%;
+                height: auto;
+            }
+            #controls {
+                display: block;
+            }
+            .instructions {
+                font-size: 14px;
+                padding: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -46,14 +115,21 @@
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
     </div>
+    <div id="controls">
+        <button class="control-btn" id="upBtn">↑</button>
+        <button class="control-btn" id="downBtn">↓</button>
+        <button class="control-btn" id="leftBtn">←</button>
+        <button class="control-btn" id="rightBtn">→</button>
+        <button class="control-btn" id="restartBtn">Restart</button>
+    </div>
     <div class="instructions">
         <h2>How to Play</h2>
         <ul>
-            <li>Use arrow keys to control the snake</li>
+            <li>Use arrow keys or touch controls to move the snake</li>
             <li>Eat the red food to grow and increase your score</li>
             <li>Avoid hitting yourself</li>
             <li>Press P to pause the game</li>
-            <li>Press R to restart when game is over</li>
+            <li>Press R or Restart button to restart when game is over</li>
             <li>Your high score is saved automatically</li>
         </ul>
     </div>
@@ -84,6 +160,71 @@
         const GAME_SPEED = 10;
 
         document.getElementById('highScore').textContent = highScore;
+
+        // Touch Controls
+        const upBtn = document.getElementById('upBtn');
+        const downBtn = document.getElementById('downBtn');
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        function handleDirection(direction) {
+            if(paused || gameOver) return;
+            
+            switch(direction) {
+                case 'up':
+                    if(snake.direction.y !== 1) {
+                        snake.direction = {x: 0, y: -1};
+                    }
+                    break;
+                case 'down':
+                    if(snake.direction.y !== -1) {
+                        snake.direction = {x: 0, y: 1};
+                    }
+                    break;
+                case 'left':
+                    if(snake.direction.x !== 1) {
+                        snake.direction = {x: -1, y: 0};
+                    }
+                    break;
+                case 'right':
+                    if(snake.direction.x !== -1) {
+                        snake.direction = {x: 1, y: 0};
+                    }
+                    break;
+            }
+        }
+
+        // Touch event listeners
+        upBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleDirection('up');
+        });
+        downBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleDirection('down');
+        });
+        leftBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleDirection('left');
+        });
+        rightBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleDirection('right');
+        });
+        restartBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if(gameOver) resetGame();
+        });
+
+        // Mouse event listeners for testing on desktop
+        upBtn.addEventListener('click', () => handleDirection('up'));
+        downBtn.addEventListener('click', () => handleDirection('down'));
+        leftBtn.addEventListener('click', () => handleDirection('left'));
+        rightBtn.addEventListener('click', () => handleDirection('right'));
+        restartBtn.addEventListener('click', () => {
+            if(gameOver) resetGame();
+        });
 
         function drawGrid() {
             ctx.fillStyle = '#003300';
@@ -116,7 +257,6 @@
                 y: (snake.body[0].y + snake.direction.y + GRID_HEIGHT) % GRID_HEIGHT
             };
 
-            // Check for collision with self
             if(snake.body.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
                 gameOver = true;
                 if(score > highScore) {
@@ -142,7 +282,6 @@
         function randomizeFood() {
             food.x = Math.floor(Math.random() * GRID_WIDTH);
             food.y = Math.floor(Math.random() * GRID_HEIGHT);
-            // Make sure food doesn't appear on snake
             while(snake.body.some(segment => segment.x === food.x && segment.y === food.y)) {
                 food.x = Math.floor(Math.random() * GRID_WIDTH);
                 food.y = Math.floor(Math.random() * GRID_HEIGHT);
@@ -172,7 +311,7 @@
 
             if(gameOver) {
                 drawText('GAME OVER', 48, canvas.height / 2);
-                drawText('Press R to restart', 24, canvas.height / 2 + 40);
+                drawText('Press R or Restart to play again', 24, canvas.height / 2 + 40);
             } else if(paused) {
                 drawText('PAUSED', 48, canvas.height / 2);
                 drawText('Press P to continue', 24, canvas.height / 2 + 40);
@@ -196,28 +335,31 @@
             } else if(!paused && !gameOver) {
                 switch(e.key) {
                     case 'ArrowUp':
-                        if(snake.direction.y !== 1) {
-                            snake.direction = {x: 0, y: -1};
-                        }
+                        handleDirection('up');
                         break;
                     case 'ArrowDown':
-                        if(snake.direction.y !== -1) {
-                            snake.direction = {x: 0, y: 1};
-                        }
+                        handleDirection('down');
                         break;
                     case 'ArrowLeft':
-                        if(snake.direction.x !== 1) {
-                            snake.direction = {x: -1, y: 0};
-                        }
+                        handleDirection('left');
                         break;
                     case 'ArrowRight':
-                        if(snake.direction.x !== -1) {
-                            snake.direction = {x: 1, y: 0};
-                        }
+                        handleDirection('right');
                         break;
                 }
             }
         });
+
+        // Prevent scrolling when touching the canvas
+        document.body.addEventListener('touchstart', function(e) {
+            if (e.target.tagName === 'BUTTON') {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.body.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
 
         // Start the game
         randomizeFood();
